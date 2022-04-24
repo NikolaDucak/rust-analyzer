@@ -57,7 +57,7 @@ pub(crate) fn move_module_to_file(acc: &mut Assists, ctx: &AssistContext) -> Opt
                     _ => (),
                 }
                 let segments = iter::successors(Some(module_ast.clone()), |module| module.parent())
-                    .filter_map(|it| it.name())
+                    .filter_map(|it| it.name().map(remove_raw_prefix))
                     .collect::<Vec<_>>();
                 format_to!(buf, "{}", segments.into_iter().rev().format("/"));
                 format_to!(buf, ".rs");
@@ -92,6 +92,10 @@ pub(crate) fn move_module_to_file(acc: &mut Assists, ctx: &AssistContext) -> Opt
     )
 }
 
+fn remove_raw_prefix(name: ast::Name) -> String {
+    name.text().trim_start_matches("r#").to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use crate::tests::{check_assist, check_assist_not_applicable};
@@ -111,6 +115,24 @@ mod $0tests {
 //- /main.rs
 mod tests;
 //- /tests.rs
+#[test] fn t() {}
+"#,
+        );
+    }
+
+    #[test]
+    fn removes_raw_keyword_prefix() {
+        check_assist(
+            move_module_to_file,
+            r#"
+mod $0r#static {
+    #[test] fn t() {}
+}
+"#,
+            r#"
+//- /main.rs
+mod r#static;
+//- /static.rs
 #[test] fn t() {}
 "#,
         );
